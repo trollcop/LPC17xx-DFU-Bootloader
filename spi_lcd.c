@@ -2,6 +2,7 @@
 #include "spi.h"
 #include "spi_lcd.h"
 #include "glcdfont.h"
+#include "delay.h"
 #include <string.h>
 
 static spi_private_t spi;
@@ -16,25 +17,23 @@ static uint8_t contrast = 9;
 
 #define LCDWIDTH    (128)
 #define LCDHEIGHT   (64)
-#define LCDPAGES    ((LCDHEIGHT + 7) / 8)
-#define FB_SIZE     (LCDWIDTH * LCDPAGES)
 #endif
 
 #ifdef HW_V2
 static PinName cs = P0_16;
 static PinName a0 = P4_28;
 static PinName rst = P3_25;
-static uint8_t reversed = 0;
+static uint8_t reversed = 1;
 static uint8_t contrast = 40;
 
 #define LCDWIDTH    (192)
 #define LCDHEIGHT   (64)
-#define LCDPAGES    ((LCDHEIGHT + 7) / 8)
-#define FB_SIZE     (LCDWIDTH * LCDPAGES)
 #endif
 
 #define CLAMP(x, low, high) { if ( (x) < (low) ) x = (low); if ( (x) > (high) ) x = (high); } while (0);
 #define swap(a, b) { uint8_t t = a; a = b; b = t; }
+#define LCDPAGES    ((LCDHEIGHT + 7) / 8)
+#define FB_SIZE     (LCDWIDTH * LCDPAGES)
 
 static uint8_t tx;
 static uint8_t ty;
@@ -71,12 +70,7 @@ static void set_xy(int x, int y)
 
     CLAMP(x, 0, LCDWIDTH - 1);
     CLAMP(y, 0, LCDPAGES - 1);
-#ifdef HW_V1
     cmd[0] = 0xb0 | (y & 0x07);
-#endif
-#ifdef HW_V2
-    cmd[0] = 0xb0 | (y);
-#endif
     cmd[1] = 0x10 | (x >> 4);
     cmd[2] = 0x00 | (x & 0x0f);
     
@@ -91,8 +85,8 @@ static void setCursor(uint8_t col, uint8_t row)
 
 static void init(void)
 {
-#ifdef HW_V1
     const uint8_t init_seq[] = {
+#ifdef HW_V1
         0x40,    //Display start line 0
         (uint8_t)(reversed ? 0xa0 : 0xa1), // ADC
         (uint8_t)(reversed ? 0xc8 : 0xc0), // COM select
@@ -107,10 +101,8 @@ static void init(void)
         0xac,    //No indicator
         0x00,
         0xaf,    //Display on
-    };
 #endif
 #ifdef HW_V2
-    const uint8_t init_seq[] = {
         0xE2,    //Display start line 0
         0xAE,
         0xAB,
@@ -127,10 +119,11 @@ static void init(void)
         0x40,
         0xA6,
         0xAF
-    };
 #endif
-    
+    };
+
     GPIO_set(rst);
+    delayWaitms(10);
     send_commands(init_seq, sizeof(init_seq));
     clear();
 }
@@ -214,11 +207,10 @@ void lcdInit(void)
 
     GPIO_init(rst);
     GPIO_output(rst);
-    GPIO_set(rst);
+    GPIO_clear(rst);
 
     // Write junk to LCD
     init();
-    clear();
     send_pic(framebuffer);
 }
 

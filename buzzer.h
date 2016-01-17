@@ -2,4 +2,4 @@
 
 void buzzerInit(void);
 void buzzerBuzz(uint16_t freq, long duration);
-void buzzerPlay(uint16_t *sequence);
+void buzzerPlay(const uint16_t *sequence);
