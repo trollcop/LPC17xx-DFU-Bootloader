@@ -11,18 +11,13 @@
 static uint32_t us_ticks;
 static volatile uint32_t ticks = 0;
 
-#ifdef HW_V1
-#define SYSCLK_HZ (100000000)
-#endif
-
-#ifdef HW_V2
-#define SYSCLK_HZ (120000000)
-#endif
-
 void delayInit(void)
 {
+    // update SystemCoreClock uint32
+    SystemCoreClockUpdate();
+
     /* compute the number of system clocks per microsecond */
-    us_ticks = SYSCLK_HZ / 1000000;
+    us_ticks = SystemCoreClock / 1000000;
 
     /* turn on access to the DWT registers */
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;

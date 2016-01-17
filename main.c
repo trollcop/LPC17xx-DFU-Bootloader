@@ -42,7 +42,7 @@ static const char *firmware_old  = "firmware.cur";
 
 #define BLOCK_SIZE (512)
 
-void check_sd_firmware(void)
+void flash_sd_firmware(void)
 {
     uint32_t r = BLOCK_SIZE;
     uint8_t buf[BLOCK_SIZE];
@@ -84,47 +84,45 @@ void check_sd_firmware(void)
 // found here http://knowledgebase.nxp.trimm.net/showthread.php?t=2869
 typedef void __attribute__((noreturn))(*exec)();
 
-static void boot(uint32_t a)
+static void boot(void)
 {
     uint32_t *start;
 
+    __disable_irq();
+    SCB->VTOR = (USER_FLASH_START & 0x1FFFFF80);
     __set_MSP(*(uint32_t *)USER_FLASH_START);
     start = (uint32_t *)(USER_FLASH_START + 4);
     ((exec)(*start))();
 }
 
-static void new_execute_user_code(void)
+static int new_execute_user_code(void)
 {
-    uint32_t addr = (uint32_t)USER_FLASH_START;
-    
-    // delay (why?)
-    delayWaitms(300);
+    // check blank flash
+    if (*(uint32_t *)(USER_FLASH_START) == 0xFFFFFFFF)
+        return 1;
 
-	// relocate vector table
-	SCB->VTOR = (addr & 0x1FFFFF80);
-	// switch to RC generator
-	LPC_SC->PLL0CON = 0x1; // disconnect PLL0
-	LPC_SC->PLL0FEED = 0xAA;
-	LPC_SC->PLL0FEED = 0x55;
-	while (LPC_SC->PLL0STAT&(1<<25));
-	LPC_SC->PLL0CON = 0x0;    // power down
-	LPC_SC->PLL0FEED = 0xAA;
-	LPC_SC->PLL0FEED = 0x55;
-	while (LPC_SC->PLL0STAT&(1<<24));
-	// disable PLL1
-	LPC_SC->PLL1CON   = 0;
-	LPC_SC->PLL1FEED  = 0xAA;
-	LPC_SC->PLL1FEED  = 0x55;
-	while (LPC_SC->PLL1STAT&(1<<9));
+    // relocate vector table
+    SCB->VTOR = (USER_FLASH_START & 0x1FFFFF80);
+    // switch to RC generator
+    LPC_SC->PLL0CON = 0x1; // disconnect PLL0
+    LPC_SC->PLL0FEED = 0xAA;
+    LPC_SC->PLL0FEED = 0x55;
+    while (LPC_SC->PLL0STAT&(1<<25));
+    LPC_SC->PLL0CON = 0x0;    // power down
+    LPC_SC->PLL0FEED = 0xAA;
+    LPC_SC->PLL0FEED = 0x55;
+    while (LPC_SC->PLL0STAT&(1<<24));
+    // disable PLL1
+    LPC_SC->PLL1CON   = 0;
+    LPC_SC->PLL1FEED  = 0xAA;
+    LPC_SC->PLL1FEED  = 0x55;
+    while (LPC_SC->PLL1STAT&(1<<9));
 
-	LPC_SC->FLASHCFG &= 0x0fff;  // This is the default flash read/write setting for IRC
-	LPC_SC->FLASHCFG |= 0x5000;
-	LPC_SC->CCLKCFG = 0x0;     //  Select the IRC as clk
-	LPC_SC->CLKSRCSEL = 0x00;
-	LPC_SC->SCS = 0x00;		    // not using XTAL anymore
-
-    // another delay (why?)
-    delayWaitms(100);
+    LPC_SC->FLASHCFG &= 0x0fff;  // This is the default flash read/write setting for IRC
+    LPC_SC->FLASHCFG |= 0x5000;
+    LPC_SC->CCLKCFG = 0x0;     //  Select the IRC as clk
+    LPC_SC->CLKSRCSEL = 0x00;
+    LPC_SC->SCS = 0x00;		    // not using XTAL anymore
 
     // reset pipeline, sync bus and memory access
 	__asm (
@@ -132,7 +130,11 @@ static void new_execute_user_code(void)
 		   "dsb\n"
 		   "isb\n"
 		  );
-	boot(addr);
+	
+
+    boot();
+    
+    return 0;
 }
 
 static void digitalLo(PinName pin)
@@ -151,6 +153,7 @@ static void digitalHi(PinName pin)
 
 int main(void)
 {
+    int rv = 0;
     static uint16_t bootseq[] = { 500, 100, 580, 200, 0, 0 };
     static uint16_t jumpseq[] = { 580, 100, 500, 200, 0, 0 };
 
@@ -164,31 +167,37 @@ int main(void)
     digitalLo(P2_4);
     digitalHi(P3_26);
 
-    delayInit();
-
     SDCard_init(P0_9, P0_8, P0_7, P0_6);
 
     // if firmware file not found, directly jump to userspace without initializing other stuff
     f_mount(0, &fat);
     if (f_open(&file, firmware_file, FA_READ) != FR_OK)
-        new_execute_user_code();
+        rv = new_execute_user_code();
 
     // or else, show stuff on-screen
-    lcdInit();
+    delayInit();
     buzzerInit();
+    buzzerPlay(bootseq);
+    lcdInit();
+    
+    if (rv) {
+        // flash was empty (no firmware AND no flash)
+        lcdSetCursor(1, 0);
+        lcdWrite("NO BOOTLOADER.BIN");
+
+        while(1);
+    }
 
     lcdSetCursor(1, 0);
     lcdWrite("BOOTLOADER MODE");
 
     // give SD card time to wake up
-    buzzerPlay(bootseq);
-
     delayWaitms(400);
 
     lcdSetCursor(1, 1);
     lcdWrite("LOAD FIRMWARE.BIN");
 
-    check_sd_firmware();
+    flash_sd_firmware();
 
     // clear flash counter
     lcdSetCursor(1, 4);
@@ -198,10 +207,8 @@ int main(void)
     lcdWrite("BOOTING");
 
     buzzerPlay(jumpseq);
-    // jump to user code
-    new_execute_user_code();
-
-    // not reached
+    
+    // reset to boot
     NVIC_SystemReset();
 }
 
