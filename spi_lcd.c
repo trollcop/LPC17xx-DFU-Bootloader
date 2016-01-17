@@ -68,12 +68,6 @@ static void setCursor(uint8_t col, uint8_t row)
     ty = row * 8;
 }
 
-static void home(void)
-{
-    tx = 0;
-    ty = 0;
-}
-
 static void init(void)
 {
     const uint8_t init_seq[] = {
@@ -183,7 +177,22 @@ void lcdInit(void)
     // Write junk to LCD
     init();
     clear();
-    setCursor(1, 1);
-    write("BOOTLOADER LOL");
+    send_pic(framebuffer);
+}
+
+void lcdClear(void)
+{
+    clear();
+    send_pic(framebuffer);
+}
+
+void lcdSetCursor(uint8_t col, uint8_t row)
+{
+    setCursor(col, row);
+}
+
+void lcdWrite(const char *line)
+{
+    write(line);
     send_pic(framebuffer);
 }

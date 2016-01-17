@@ -39,23 +39,20 @@
 
 #include "dfu.h"
 
-#include "min-printf.h"
+// #include "min-printf.h"
 
 #include "lpc17xx_wdt.h"
 
 #include "delay.h"
 #include "spi_lcd.h"
 #include "buzzer.h"
+#include <stdio.h>
 
-#ifndef DEBUG_MESSAGES
-#define printf(...) do {} while (0)
-#endif
+static FATFS fat;
+static FIL file;
 
-FATFS	fat;
-FIL		file;
-
-const char *firmware_file = "firmware.bin";
-const char *firmware_old  = "firmware.cur";
+static const char *firmware_file = "firmware.bin";
+static const char *firmware_old  = "firmware.cur";
 
 void setleds(int leds)
 {
@@ -73,11 +70,16 @@ void check_sd_firmware(void)
     uint32_t r = BLOCK_SIZE;
     uint8_t buf[BLOCK_SIZE];
     uint32_t address = USER_FLASH_START;
+    FILINFO fi;
+    char txt[32];
 
     f_mount(0, &fat);
 
     // try opening firmware file, exit if not found
     if (f_open(&file, firmware_file, FA_READ) != FR_OK)
+        return;
+    
+    if (f_stat(firmware_file, &fi) != FR_OK)
         return;
 
     while (r == BLOCK_SIZE) {
@@ -86,7 +88,12 @@ void check_sd_firmware(void)
             return;
         }
 
-        setleds((address - USER_FLASH_START) >> 15);
+        if (address % 10240 == 0) {
+            sprintf(txt, "%06d/%06d", address - USER_FLASH_START, (int)fi.fsize);
+            lcdSetCursor(1, 4);
+            lcdWrite(txt);
+        }
+        // setleds((address - USER_FLASH_START) >> 15);
 
         write_flash((void *)address, (char *)buf, BLOCK_SIZE);
         address += r;
@@ -179,6 +186,8 @@ int main(void)
     lcdInit();
     buzzerInit();
 
+    lcdSetCursor(1, 0);
+    lcdWrite("BOOTLOADER MODE");
     setleds(31);
 
     // give SD card time to wake up
@@ -186,9 +195,21 @@ int main(void)
     
     delayWaitms(400);
 
+    lcdSetCursor(1, 1);
+    lcdWrite("INITIALIZING SD...");
     SDCard_init(P0_9, P0_8, P0_7, P0_6);
+
+    lcdSetCursor(1, 2);
+    lcdWrite("LOAD FIRMWARE.BIN");
+
     check_sd_firmware();
 
+    // clear flash counter
+    lcdSetCursor(1, 4);
+    lcdWrite("              ");
+
+    lcdSetCursor(1, 3);
+    lcdWrite("BOOTING...");
     buzzerPlay(jumpseq);
     // jump to user code
     new_execute_user_code();
