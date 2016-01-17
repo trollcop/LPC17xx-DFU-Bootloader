@@ -2,11 +2,6 @@
 #define SDCARD_H
 
 #include "spi.h"
-// #include "gpio.hpp"
-
-// #include "disk.h"
-
-// #include "DMA.h"
 
 /** Create the File System for accessing an SD Card using SPI
 	*

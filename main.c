@@ -42,8 +42,7 @@
 #include "min-printf.h"
 
 #include "lpc17xx_wdt.h"
-
-#define ISP_BTN	P2_12
+#include "spi_lcd.h"
 
 #ifndef DEBUG_MESSAGES
 #define printf(...) do {} while (0)
@@ -64,59 +63,39 @@ void setleds(int leds)
 	GPIO_write(LED5, leds & 16);
 }
 
-int isp_btn_pressed(void)
-{
-	return GPIO_get(ISP_BTN);
-}
-
-void start_dfu(void)
-{
-	DFU_init();
-	usb_init();
-	usb_connect();
-	while (DFU_complete() == 0)
-		usb_task();
-	usb_disconnect();
-}
+#define BLOCK_SIZE (512)
 
 void check_sd_firmware(void)
 {
-	int r;
-// 	printf("Check SD\n");
-	f_mount(0, &fat);
-	if ((r = f_open(&file, firmware_file, FA_READ)) == FR_OK)
-	{
-// 		printf("Flashing firmware...\n");
-		uint8_t buf[512];
-		unsigned int r = sizeof(buf);
-		uint32_t address = USER_FLASH_START;
-		while (r == sizeof(buf))
-		{
-			if (f_read(&file, buf, sizeof(buf), &r) != FR_OK)
-			{
-				f_close(&file);
-				return;
-			}
+    uint32_t r = BLOCK_SIZE;
+    uint8_t buf[BLOCK_SIZE];
+    uint32_t address = USER_FLASH_START;
 
-			setleds((address - USER_FLASH_START) >> 15);
+    f_mount(0, &fat);
 
-// 			printf("\t0x%lx\n", address);
+    // try opening firmware file, exit if not found
+    if (f_open(&file, firmware_file, FA_READ) != FR_OK)
+        return;
 
-			write_flash((void *) address, (char *)buf, sizeof(buf));
-			address += r;
-		}
-		f_close(&file);
-		if (address > USER_FLASH_START)
-		{
-// 			printf("Complete!\n");
-			r = f_unlink(firmware_old);
-			r = f_rename(firmware_file, firmware_old);
-		}
-	}
-	else
-	{
-// 		printf("open: %d\n", r);
-	}
+    while (r == BLOCK_SIZE) {
+        if (f_read(&file, buf, sizeof(buf), &r) != FR_OK) {
+            f_close(&file);
+            return;
+        }
+
+        setleds((address - USER_FLASH_START) >> 15);
+
+        write_flash((void *)address, (char *)buf, BLOCK_SIZE);
+        address += r;
+    }
+
+    f_close(&file);
+
+    // successful flash, rename file
+    if (address > USER_FLASH_START) {
+        f_unlink(firmware_old);
+        f_rename(firmware_file, firmware_old);
+    }
 }
 
 // this seems to fix an issue with handoff after poweroff
@@ -134,11 +113,11 @@ static void boot(uint32_t a)
 
 static uint32_t delay_loop(uint32_t count)
 {
-	volatile uint32_t j, del;
-	for(j=0; j<count; ++j){
-		del=j; // volatiles, so the compiler will not optimize the loop
-	}
-	return del;
+    volatile uint32_t j, del;
+    for(j = 0; j < count; ++j)
+        del = j; // volatiles, so the compiler will not optimize the loop
+
+    return del;
 }
 
 static void new_execute_user_code(void)
@@ -180,126 +159,53 @@ static void new_execute_user_code(void)
 
 int main(void)
 {
-	WDT_Feed();
+    WDT_Feed();
 
-	GPIO_init(ISP_BTN); GPIO_input(ISP_BTN);
+    GPIO_init(LED1); GPIO_output(LED1);
+    GPIO_init(LED2); GPIO_output(LED2);
+    GPIO_init(LED3); GPIO_output(LED3);
+    GPIO_init(LED4); GPIO_output(LED4);
+    GPIO_init(LED5); GPIO_output(LED5);
 
-	GPIO_init(LED1); GPIO_output(LED1);
-	GPIO_init(LED2); GPIO_output(LED2);
-	GPIO_init(LED3); GPIO_output(LED3);
-	GPIO_init(LED4); GPIO_output(LED4);
-	GPIO_init(LED5); GPIO_output(LED5);
+    // turn off heater outputs
+    GPIO_init(P2_4); GPIO_output(P2_4); GPIO_write(P2_4, 0);
+    GPIO_init(P2_5); GPIO_output(P2_5); GPIO_write(P2_5, 0);
+    GPIO_init(P2_6); GPIO_output(P2_6); GPIO_write(P2_6, 0);
+    GPIO_init(P2_7); GPIO_output(P2_7); GPIO_write(P2_7, 0);
+    
+    lcdInit();
 
-	// turn off heater outputs
-	GPIO_init(P2_4); GPIO_output(P2_4); GPIO_write(P2_4, 0);
-	GPIO_init(P2_5); GPIO_output(P2_5); GPIO_write(P2_5, 0);
-	GPIO_init(P2_6); GPIO_output(P2_6); GPIO_write(P2_6, 0);
-	GPIO_init(P2_7); GPIO_output(P2_7); GPIO_write(P2_7, 0);
+    setleds(31);
 
-	setleds(31);
+    // give SD card time to wake up
+    delay_loop(4096);
 
-	UART_init(UART_RX, UART_TX, APPBAUD);
+    SDCard_init(P0_9, P0_8, P0_7, P0_6);
+    check_sd_firmware();
 
-	printf("Bootloader Start\n");
+//    if (SDCard_disk_initialize() == 0)
+        //check_sd_firmware();
 
-	// give SD card time to wake up
-	for (volatile int i = (1UL<<12); i; i--);
+    // jump to user code
+    new_execute_user_code();
 
-	SDCard_init(P0_9, P0_8, P0_7, P0_6);
-	if (SDCard_disk_initialize() == 0)
-		check_sd_firmware();
-
-	int dfu = 0;
-	if (isp_btn_pressed() == 0)
-	{
-		printf("ISP button pressed, entering DFU mode\n");
-		dfu = 1;
-	}
-	else if (WDT_ReadTimeOutFlag()) {
-		WDT_ClrTimeOutFlag();
-		printf("WATCHDOG reset, entering DFU mode\n");
-		dfu = 1;
-	} else if (*(uint32_t *)USER_FLASH_START == 0xFFFFFFFF) {
-        printf("User flash empty, enabling DFU\n");
-        dfu = 1;
-    }
-
-	if (dfu)
-		start_dfu();
-
-#ifdef WATCHDOG
-	WDT_Init(WDT_CLKSRC_IRC, WDT_MODE_RESET);
-	WDT_Start(1<<22);
-#endif
-
-	// grab user code reset vector
-// #ifdef DEBUG
-	unsigned *p = (unsigned *)(USER_FLASH_START +4);
-	printf("Jumping to 0x%x\n", *p);
-// #endif
-
-	while (UART_busy());
-	printf("Jump!\n");
-	while (UART_busy());
-	UART_deinit();
-
-	new_execute_user_code();
-
-    UART_init(UART_RX, UART_TX, APPBAUD);
-
-	printf("This should never happen\n");
-
-	while (UART_busy());
-
-	for (volatile int i = (1<<18);i;i--);
-
-	NVIC_SystemReset();
+    // not reached
+    NVIC_SystemReset();
 }
-
 
 DWORD get_fattime(void)
 {
-#define	YEAR	2012
-#define MONTH	11
-#define DAY		13
-#define HOUR	20
-#define MINUTE	13
-#define SECOND	1
-	return	((YEAR  & 127) << 25) |
-			((MONTH &  15) << 21) |
-			((DAY   &  31) << 16) |
-			((HOUR  &  31) << 11) |
-			((MINUTE & 63) <<  5) |
-			((SECOND & 63) <<  0);
-}
+#define YEAR    2016
+#define MONTH   1
+#define DAY     16
+#define HOUR    4
+#define MINUTE  20
+#define SECOND  0
 
-int _write(int fd, const char *buf, int buflen)
-{
-	if (fd < 3)
-	{
-		while (UART_cansend() < buflen);
-		return UART_send((const uint8_t *)buf, buflen);
-	}
-	return buflen;
-}
-
-void NMI_Handler() {
-// 	printf("NMI\n");
-	for (;;);
-}
-void HardFault_Handler() {
-// 	printf("HardFault\n");
-	for (;;);
-}
-void MemManage_Handler() {
-// 	printf("MemManage\n");
-	for (;;);
-}
-void BusFault_Handler() {
-// 	printf("BusFault\n");
-	for (;;);
-}
-void UsageFault_Handler() {
-// 	printf("UsageFault\n");
-	for (;;);
+    return  ((uint32_t)(YEAR  & 127) << 25) |
+            ((MONTH &  15) << 21) |
+            ((DAY   &  31) << 16) |
+            ((HOUR  &  31) << 11) |
+            ((MINUTE & 63) <<  5) |
+            ((SECOND & 63) <<  0);
 }

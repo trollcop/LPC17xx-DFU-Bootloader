@@ -8,21 +8,21 @@
 #include "pins.h"
 
 
-void SPI_init(PinName mosi, PinName miso, PinName sclk);
+typedef struct spi_private_t {
+    Pin_t miso;
+    Pin_t mosi;
+    Pin_t sclk;
+    SPI_REG *sspr;
+} spi_private_t;
 
-void SPI_frequency(uint32_t);
-uint8_t SPI_write(uint8_t);
+void SPI_init(spi_private_t *priv, PinName mosi, PinName miso, PinName sclk);
 
-int SPI_writeblock(uint8_t *, int);
+void SPI_frequency(spi_private_t *priv, uint32_t speed);
+uint8_t SPI_write(spi_private_t *priv, uint8_t data);
 
-int SPI_can_DMA(void);
-int setup_DMA_rx(DMA_REG *);
-int setup_DMA_tx(DMA_REG *);
-
-void SPI_irq(void);
+int SPI_writeblock(spi_private_t *priv, uint8_t *buf, int len);
 
 typedef void (*fptr)(void);
 extern fptr isr_dispatch[N_SPI_INTERRUPT_ROUTINES];
-
 
 #endif /* _SPI_H */
