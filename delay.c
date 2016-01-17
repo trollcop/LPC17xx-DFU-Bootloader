@@ -11,7 +11,13 @@
 static uint32_t us_ticks;
 static volatile uint32_t ticks = 0;
 
+#ifdef HW_V1
 #define SYSCLK_HZ (100000000)
+#endif
+
+#ifdef HW_V2
+#define SYSCLK_HZ (120000000)
+#endif
 
 void delayInit(void)
 {

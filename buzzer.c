@@ -2,7 +2,13 @@
 #include "delay.h"
 #include "buzzer.h"
 
+#ifdef HW_V1
 static PinName buzz = P1_9;
+#endif
+
+#ifdef HW_V2
+static PinName buzz = P4_29;
+#endif
 
 void buzzerInit(void)
 {

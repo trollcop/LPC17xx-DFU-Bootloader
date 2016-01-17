@@ -5,11 +5,12 @@
 #include <string.h>
 
 static spi_private_t spi;
+
+#ifdef HW_V1
 static PinName cs = P0_16;
 static PinName bg_ctl = P0_22;
 static PinName a0 = P1_26;
 static PinName rst = P1_27;
-
 static uint8_t reversed = 0;
 static uint8_t contrast = 9;
 
@@ -17,6 +18,20 @@ static uint8_t contrast = 9;
 #define LCDHEIGHT   (64)
 #define LCDPAGES    ((LCDHEIGHT + 7) / 8)
 #define FB_SIZE     (LCDWIDTH * LCDPAGES)
+#endif
+
+#ifdef HW_V2
+static PinName cs = P0_16;
+static PinName a0 = P4_28;
+static PinName rst = P3_25;
+static uint8_t reversed = 0;
+static uint8_t contrast = 40;
+
+#define LCDWIDTH    (192)
+#define LCDHEIGHT   (64)
+#define LCDPAGES    ((LCDHEIGHT + 7) / 8)
+#define FB_SIZE     (LCDWIDTH * LCDPAGES)
+#endif
 
 #define CLAMP(x, low, high) { if ( (x) < (low) ) x = (low); if ( (x) > (high) ) x = (high); } while (0);
 #define swap(a, b) { uint8_t t = a; a = b; b = t; }
@@ -56,9 +71,15 @@ static void set_xy(int x, int y)
 
     CLAMP(x, 0, LCDWIDTH - 1);
     CLAMP(y, 0, LCDPAGES - 1);
+#ifdef HW_V1
     cmd[0] = 0xb0 | (y & 0x07);
+#endif
+#ifdef HW_V2
+    cmd[0] = 0xb0 | (y);
+#endif
     cmd[1] = 0x10 | (x >> 4);
     cmd[2] = 0x00 | (x & 0x0f);
+    
     send_commands(cmd, 3);
 }
 
@@ -70,6 +91,7 @@ static void setCursor(uint8_t col, uint8_t row)
 
 static void init(void)
 {
+#ifdef HW_V1
     const uint8_t init_seq[] = {
         0x40,    //Display start line 0
         (uint8_t)(reversed ? 0xa0 : 0xa1), // ADC
@@ -86,6 +108,27 @@ static void init(void)
         0x00,
         0xaf,    //Display on
     };
+#endif
+#ifdef HW_V2
+    const uint8_t init_seq[] = {
+        0xE2,    //Display start line 0
+        0xAE,
+        0xAB,
+        0xA2,
+        (uint8_t)(reversed ? 0xa0 : 0xa1), // ADC
+        (uint8_t)(reversed ? 0xc8 : 0xc0), // COM select
+        0x2C,
+        0x2E,
+        0x2F,
+        0x20,
+        0x81, // contrast
+        contrast,    //contrast value
+        0xA4,
+        0x40,
+        0xA6,
+        0xAF
+    };
+#endif
     
     GPIO_set(rst);
     send_commands(init_seq, sizeof(init_seq));
@@ -116,15 +159,15 @@ static int drawChar(int x, int y, unsigned char c, int color)
     } else {
         for (i = 0; i < 5; i++ ) {
             if (color == 0) {
-                framebuffer[x + (y / 8 * 128) ] = ~(glcd_font[(c * 5) + i] << y % 8);
-                if (y + 8 < 63) {
-                    framebuffer[x + ((y + 8) / 8 * 128) ] = ~(glcd_font[(c * 5) + i] >> (8 - (y % 8)));
+                framebuffer[x + (y / 8 * LCDWIDTH) ] = ~(glcd_font[(c * 5) + i] << y % 8);
+                if (y + 8 < (LCDHEIGHT - 1)) {
+                    framebuffer[x + ((y + 8) / 8 * LCDWIDTH) ] = ~(glcd_font[(c * 5) + i] >> (8 - (y % 8)));
                 }
             }
             if (color == 1) {
-                framebuffer[x + ((y) / 8 * 128) ] = glcd_font[(c * 5) + i] << (y % 8);
-                if (y + 8 < 63) {
-                    framebuffer[x + ((y + 8) / 8 * 128) ] = glcd_font[(c * 5) + i] >> (8 - (y % 8));
+                framebuffer[x + ((y) / 8 * LCDWIDTH) ] = glcd_font[(c * 5) + i] << (y % 8);
+                if (y + 8 < (LCDHEIGHT - 1)) {
+                    framebuffer[x + ((y + 8) / 8 * LCDWIDTH) ] = glcd_font[(c * 5) + i] >> (8 - (y % 8));
                 }
             }
             x++;
@@ -150,10 +193,6 @@ static void write(const char *line)
         write_char(line[i]);
 }
 
-
-
-
-
 void lcdInit(void)
 {
     SPI_init(&spi, P0_18, P0_17, P0_15);
@@ -161,10 +200,13 @@ void lcdInit(void)
     GPIO_init(cs);
     GPIO_output(cs);
     GPIO_set(cs);
-    
+
+    // only V1 has backlight switch
+#ifdef HW_V1
     GPIO_init(bg_ctl);
     GPIO_output(bg_ctl);
     GPIO_set(bg_ctl);
+#endif
 
     GPIO_init(a0);
     GPIO_output(a0);
