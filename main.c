@@ -80,60 +80,19 @@ void flash_sd_firmware(void)
     }
 }
 
-// this seems to fix an issue with handoff after poweroff
-// found here http://knowledgebase.nxp.trimm.net/showthread.php?t=2869
-typedef void __attribute__((noreturn))(*exec)();
-
-static void boot(void)
-{
-    uint32_t *start;
-
-    __disable_irq();
-    SCB->VTOR = (USER_FLASH_START & 0x1FFFFF80);
-    __set_MSP(*(uint32_t *)USER_FLASH_START);
-    start = (uint32_t *)(USER_FLASH_START + 4);
-    ((exec)(*start))();
-}
+#define END_OF_RAM (0x10007FFC)
 
 static int new_execute_user_code(void)
 {
     // check blank flash
     if (*(uint32_t *)(USER_FLASH_START) == 0xFFFFFFFF)
         return 1;
+    // write a marker at end of RAM for reset vector to jump to userspace
+    *(uint32_t *)(END_OF_RAM) = 0xDEADBEEF;
+    // Reboot
+    NVIC_SystemReset();
 
-    // relocate vector table
-    SCB->VTOR = (USER_FLASH_START & 0x1FFFFF80);
-    // switch to RC generator
-    LPC_SC->PLL0CON = 0x1; // disconnect PLL0
-    LPC_SC->PLL0FEED = 0xAA;
-    LPC_SC->PLL0FEED = 0x55;
-    while (LPC_SC->PLL0STAT&(1<<25));
-    LPC_SC->PLL0CON = 0x0;    // power down
-    LPC_SC->PLL0FEED = 0xAA;
-    LPC_SC->PLL0FEED = 0x55;
-    while (LPC_SC->PLL0STAT&(1<<24));
-    // disable PLL1
-    LPC_SC->PLL1CON   = 0;
-    LPC_SC->PLL1FEED  = 0xAA;
-    LPC_SC->PLL1FEED  = 0x55;
-    while (LPC_SC->PLL1STAT&(1<<9));
-
-    LPC_SC->FLASHCFG &= 0x0fff;  // This is the default flash read/write setting for IRC
-    LPC_SC->FLASHCFG |= 0x5000;
-    LPC_SC->CCLKCFG = 0x0;     //  Select the IRC as clk
-    LPC_SC->CLKSRCSEL = 0x00;
-    LPC_SC->SCS = 0x00;		    // not using XTAL anymore
-
-    // reset pipeline, sync bus and memory access
-	__asm (
-		   "dmb\n"
-		   "dsb\n"
-		   "isb\n"
-		  );
-	
-
-    boot();
-    
+    // not reached
     return 0;
 }
 
@@ -156,8 +115,6 @@ int main(void)
     int rv = 0;
     static uint16_t bootseq[] = { 500, 100, 580, 200, 0, 0 };
     static uint16_t jumpseq[] = { 580, 100, 500, 200, 0, 0 };
-
-    WDT_Feed();
 
     // initialize things that can burn to sane defaults
     digitalLo(P2_0);

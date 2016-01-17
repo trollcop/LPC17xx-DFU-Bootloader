@@ -126,12 +126,26 @@ Reset_Handler   PROC
                 EXPORT  Reset_Handler             [WEAK]
                 IMPORT  SystemInit
                 IMPORT  __main
+                LDR     R0, =0x10007FFC
+                LDR     R1, =0xDEADBEEF
+                LDR     R2, [R0, #0]
+                STR     R0, [R0, #0] ; Invalidate
+                CMP     R2, R1
+                BEQ     Reboot_User
                 LDR     R0, =SystemInit
                 BLX     R0
                 LDR     R0, =__main
                 BX      R0
                 ENDP
 
+Reboot_User     PROC
+                EXPORT  Reboot_User
+                 ; Reboot to 0x00004000
+                 LDR     R0, =0x00004000
+                 LDR     SP,[R0, #0]
+                 LDR     R0,[R0, #4]
+                 BX      R0
+                 ENDP
 
 ; Dummy Exception Handlers (infinite loops which can be modified)
 
