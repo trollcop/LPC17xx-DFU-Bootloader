@@ -184,14 +184,14 @@ static inline int baud_space_search(uint32_t target_baud, uart_regs *r)
 // #pragma message STR(APPBAUD)
 // #pragma message STR(__CORE_CLK)
 
-static uint32_t const uabs(const uint32_t a, const uint32_t b)
+static uint32_t uabs(const uint32_t a, const uint32_t b)
 {
 	if (a>=b)
 		return a-b;
 	return b-a;
 }
 
-static uint32_t const calc_baud(uint32_t pclk, uint32_t dl, uint32_t divaddval, uint32_t mulval)
+static uint32_t calc_baud(uint32_t pclk, uint32_t dl, uint32_t divaddval, uint32_t mulval)
 {
 	// 65535 * 14 * 16 is less than 2**24 so we have a spare 8 bits of precision
 	// we can use them to increase our accuracy quite a bit

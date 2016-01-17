@@ -31,6 +31,7 @@
 #include "lpc17xx_gpio.h"
 
 #include <stdio.h>
+#include "delay.h"
 
 // #define SOFT_SPI
 
@@ -70,7 +71,7 @@ void SPI_init(spi_private_t *priv, PinName mosi, PinName miso, PinName sclk)
         // SSP0 on 1.20,1.23,1.24
         priv->sspr = LPC_SSP0;
 
-// //         LPC_PINCON->PINSEL3 &= 0xFFFC3CFF;
+//         LPC_PINCON->PINSEL3 &= 0xFFFC3CFF;
 //         LPC_PINCON->PINSEL3 |= 0x0003C300;
 
 //         LPC_PINCON->PINSEL3 &= ~( (3 << ((20*2)&30)) | (3 << ((23*2)&30)) | (3 << ((24*2)&30)) );
@@ -124,12 +125,6 @@ void SPI_frequency(spi_private_t *priv, uint32_t f)
     }
 }
 
-void _delay(uint32_t ticks)
-{
-    for (; ticks; ticks--)
-        asm volatile("nop\n\t");
-}
-
 uint8_t SPI_write(spi_private_t *priv, uint8_t data)
 {
     uint8_t r = 0;
@@ -152,11 +147,11 @@ uint8_t SPI_write(spi_private_t *priv, uint8_t data)
                 FIO_ClearValue(mosi.port, 1UL << mosi.pin);
             data <<= 1;
 
-            _delay(delay >> 1);                                 // DELAY
+            delayWaitus(delay >> 1);                                 // DELAY
 
             FIO_SetValue(sclk.port, 1UL << sclk.pin);           // clock HIGH
 
-            _delay(delay >> 1);                                 // DELAY
+            delayWaitus(delay >> 1);                                 // DELAY
 
             r <<= 1;
             if (FIO_ReadValue(miso.port) & (1UL << miso.pin))   // READ

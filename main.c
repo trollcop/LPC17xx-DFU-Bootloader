@@ -42,7 +42,10 @@
 #include "min-printf.h"
 
 #include "lpc17xx_wdt.h"
+
+#include "delay.h"
 #include "spi_lcd.h"
+#include "buzzer.h"
 
 #ifndef DEBUG_MESSAGES
 #define printf(...) do {} while (0)
@@ -111,20 +114,13 @@ static void boot(uint32_t a)
     ((exec)(*start))();
 }
 
-static uint32_t delay_loop(uint32_t count)
-{
-    volatile uint32_t j, del;
-    for(j = 0; j < count; ++j)
-        del = j; // volatiles, so the compiler will not optimize the loop
-
-    return del;
-}
-
 static void new_execute_user_code(void)
 {
-	uint32_t addr=(uint32_t)USER_FLASH_START;
-	// delay
-	delay_loop(3000000);
+    uint32_t addr = (uint32_t)USER_FLASH_START;
+    
+    // delay (why?)
+    delayWaitms(300);
+
 	// relocate vector table
 	SCB->VTOR = (addr & 0x1FFFFF80);
 	// switch to RC generator
@@ -147,8 +143,11 @@ static void new_execute_user_code(void)
 	LPC_SC->CCLKCFG = 0x0;     //  Select the IRC as clk
 	LPC_SC->CLKSRCSEL = 0x00;
 	LPC_SC->SCS = 0x00;		    // not using XTAL anymore
-	delay_loop(1000);
-	// reset pipeline, sync bus and memory access
+
+    // another delay (why?)
+    delayWaitms(100);
+
+    // reset pipeline, sync bus and memory access
 	__asm (
 		   "dmb\n"
 		   "dsb\n"
@@ -159,6 +158,9 @@ static void new_execute_user_code(void)
 
 int main(void)
 {
+    static uint16_t bootseq[] = { 500, 100, 580, 200, 0, 0 };
+    static uint16_t jumpseq[] = { 580, 100, 500, 200, 0, 0 };
+
     WDT_Feed();
 
     GPIO_init(LED1); GPIO_output(LED1);
@@ -172,20 +174,22 @@ int main(void)
     GPIO_init(P2_5); GPIO_output(P2_5); GPIO_write(P2_5, 0);
     GPIO_init(P2_6); GPIO_output(P2_6); GPIO_write(P2_6, 0);
     GPIO_init(P2_7); GPIO_output(P2_7); GPIO_write(P2_7, 0);
-    
+
+    delayInit();
     lcdInit();
+    buzzerInit();
 
     setleds(31);
 
     // give SD card time to wake up
-    delay_loop(4096);
+    buzzerPlay(bootseq);
+    
+    delayWaitms(400);
 
     SDCard_init(P0_9, P0_8, P0_7, P0_6);
     check_sd_firmware();
 
-//    if (SDCard_disk_initialize() == 0)
-        //check_sd_firmware();
-
+    buzzerPlay(jumpseq);
     // jump to user code
     new_execute_user_code();
 
