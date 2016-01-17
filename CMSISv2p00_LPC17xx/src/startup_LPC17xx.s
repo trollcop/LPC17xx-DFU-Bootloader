@@ -140,6 +140,10 @@ Reset_Handler   PROC
 
 Reboot_User     PROC
                 EXPORT  Reboot_User
+                 ; update SCB->VTOR
+                 LDR     R0, =0xE000ED08
+                 MOV     R4, #0x4000
+                 STR     R4, [R0, #0]
                  ; Reboot to 0x00004000
                  LDR     R0, =0x00004000
                  LDR     SP,[R0, #0]
