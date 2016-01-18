@@ -287,10 +287,12 @@ static const uint16_t elise[] = {
 
 static const uint16_t bootseq[] = { 500, 100, 580, 200, 0, 0 };
 static const uint16_t jumpseq[] = { 580, 100, 500, 200, 0, 0 };
+static const uint16_t waitseq[] = { 440, 100, 350, 300, 0, 0 };
 
 int main(void)
 {
     int rv = 0;
+    FRESULT res;
 
     // initialize things that can burn to sane defaults
     digitalLo(P2_0);
@@ -306,16 +308,18 @@ int main(void)
     delayWaitms(500);
     SDCard_init(P0_9, P0_8, P0_7, P0_6);
 
-    // if firmware file not found, directly jump to userspace without initializing other stuff
+    // if firmware file not found, directly jump to userspace without initializing other stuff, but if SD card is not inserted, wait around in a loop
     f_mount(0, &fat);
-    if (f_open(&file, firmware_file, FA_READ) != FR_OK)
+    res = f_open(&file, firmware_file, FA_READ);
+    // file not found, try jumping to userspace. rv will be non-zero if userspace is blank
+    if (res == FR_NO_FILE)
         rv = new_execute_user_code();
 
     // or else, show stuff on-screen
     buzzerInit();
     buzzerPlay(bootseq);
     lcdInit();
-    
+
     if (rv) {
         // flash was empty (no firmware AND no flash)
         lcdSetCursor(1, 0);
@@ -323,19 +327,36 @@ int main(void)
         lcdSetCursor(1, 1);
         lcdWrite("EMPTY FLASH, TOO");
         lcdSetCursor(1, 2);
-        lcdWrite("NOWHERE TO GO");
+        lcdWrite("NOWHERE TO GO :(");
         lcdSetCursor(1, 3);
         lcdWrite("CHECK SDCARD, RETRY");
 
         while(1)
             buzzerPlay(elise);
     }
+    
+    if (res == FR_NOT_READY) {
+        lcdSetCursor(1, 0);
+        lcdWrite("SDCard Not Inserted");
+        lcdSetCursor(1, 1);
+        lcdWrite("~ Waiting for card ~");
+    }
+
+    while (res == FR_NOT_READY) {
+        f_close(&file);
+        buzzerPlay(waitseq);
+        delayWaitms(1000);
+        res = f_open(&file, firmware_file, FA_READ);
+    }
+
+    lcdClear();
+
+    // reboot if SD was inserted, but without firmware file
+    if (res != FR_OK)
+        NVIC_SystemReset();
 
     lcdSetCursor(1, 0);
     lcdWrite("BOOTLOADER MODE");
-
-    // give SD card time to wake up
-    delayWaitms(400);
 
     lcdSetCursor(1, 1);
     lcdWrite("LOAD FIRMWARE.BIN");
