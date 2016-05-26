@@ -32,6 +32,7 @@
 #include "delay.h"
 #include "spi_lcd.h"
 #include "buzzer.h"
+#include "mcp23008.h"
 #include <stdio.h>
 
 static FATFS fat;
@@ -301,6 +302,9 @@ int main(void)
     digitalLo(P2_3);
     digitalLo(P2_4);
     digitalHi(P3_26);
+
+    // initialize GPIO expander on V2 hw and set some pins
+    mcpInit();
 
     delayInit();
     
