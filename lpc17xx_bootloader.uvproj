@@ -10,7 +10,7 @@
       <TargetName>LPC1768</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pCCUsed>5060061::V5.06 update 1 (build 61)::ARMCC</pCCUsed>
+      <pCCUsed>5060183::V5.06 update 2 (build 183)::ARMCC</pCCUsed>
       <TargetOption>
         <TargetCommonOption>
           <Device>LPC1768</Device>
@@ -349,7 +349,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>4</Optim>
+            <Optim>2</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
@@ -367,6 +367,8 @@
             <v6LangP>0</v6LangP>
             <vShortEn>0</vShortEn>
             <vShortWch>0</vShortWch>
+            <v6Lto>0</v6Lto>
+            <v6WtE>0</v6WtE>
             <VariousControls>
               <MiscControls>--gnu</MiscControls>
               <Define>MAX_URI_LENGTH=512,__LPC17XX__,USB_DEVICE_ONLY,HW_V1</Define>
@@ -633,6 +635,11 @@
               <FileName>sbl_iap.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\sbl_iap.c</FilePath>
+            </File>
+            <File>
+              <FileName>mcp23008.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\mcp23008.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -998,6 +1005,8 @@
             <v6LangP>0</v6LangP>
             <vShortEn>0</vShortEn>
             <vShortWch>0</vShortWch>
+            <v6Lto>0</v6Lto>
+            <v6WtE>0</v6WtE>
             <VariousControls>
               <MiscControls>--gnu</MiscControls>
               <Define>MAX_URI_LENGTH=512,__LPC17XX__,USB_DEVICE_ONLY,APPBAUD=100000</Define>
@@ -1264,6 +1273,11 @@
               <FileName>sbl_iap.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\sbl_iap.c</FilePath>
+            </File>
+            <File>
+              <FileName>mcp23008.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\mcp23008.c</FilePath>
             </File>
           </Files>
         </Group>
