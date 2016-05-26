@@ -17,25 +17,20 @@
 extern const unsigned sector_start_map[];
 extern const unsigned sector_end_map[];
 
-
-unsigned write_flash(unsigned * dst, char * src, unsigned no_of_bytes);
-void execute_user_code(void);
-int user_code_present(void);
-void erase_user_flash(void);
-void check_isp_entry_pin(void);
+unsigned write_flash(unsigned *dst, char *src, unsigned no_of_bytes);
 void erase_user_flash(void);
 
 typedef enum
 {
-	PREPARE_SECTOR_FOR_WRITE	=50,
-	COPY_RAM_TO_FLASH			=51,
-	ERASE_SECTOR				=52,
-	BLANK_CHECK_SECTOR			=53,
-	READ_PART_ID				=54,
-	READ_BOOT_VER				=55,
-	COMPARE						=56,
-	REINVOKE_ISP				=57
-}IAP_Command_Code;
+    PREPARE_SECTOR_FOR_WRITE    = 50,
+    COPY_RAM_TO_FLASH           = 51,
+    ERASE_SECTOR                = 52,
+    BLANK_CHECK_SECTOR          = 53,
+    READ_PART_ID                = 54,
+    READ_BOOT_VER               = 55,
+    COMPARE                     = 56,
+    REINVOKE_ISP                = 57
+} IAP_Command_Code;
 
 #define CMD_SUCCESS 0
 #define IAP_ADDRESS 0x1FFF1FF1
